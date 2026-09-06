@@ -1,0 +1,898 @@
+<!-- =====================================================================
+  Spirit_Bash DASHBOARD — 100% client-side file tools
+  Paste this whole block into a Blogger "HTML/JavaScript" gadget (Layout)
+  or into a Page's HTML view. Nothing here needs a server — every
+  conversion runs in the visitor's own browser using open-source JS
+  libraries loaded from CDN below.
+
+  WHAT ACTUALLY WORKS (real conversion happens):
+    PDF: merge, split, extract/delete/reorder pages, rotate, page numbers,
+         watermark, basic compress, remove metadata, PDF→JPG/PNG,
+         PDF→Text, PDF→basic Word (text only), PDF→basic Excel (text only),
+         Images→PDF
+    Word: .docx→HTML, .docx→Text, .docx→PDF (formatting is approximate)
+    Excel/CSV: csv⇄xlsx⇄json, cleaning (trim/dedupe/blank rows), viewer
+    Images: compress, resize, format convert, rotate/flip, grayscale
+
+  WHAT IS NOT INCLUDED (no reliable pure-browser way to do these):
+    PowerPoint conversions, PDF password protect/remove, OCR.
+    These genuinely need a server-side engine (LibreOffice/Ghostscript/
+    OCR) — Blogger can't run one, so they're intentionally left out
+    rather than faked.
+===================================================================== -->
+
+<style>
+  #ff-root, #ff-root *{ box-sizing:border-box; }
+  #ff-root{
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    color:#1A2233; max-width:980px; margin:0 auto; padding:16px;
+  }
+  #ff-root h2{ font-size:24px; margin:0 0 4px; }
+  #ff-root .ff-sub{ font-size:13.5px; color:#5B6472; margin-bottom:18px; }
+  #ff-tabs{ display:flex; gap:6px; flex-wrap:wrap; margin-bottom:18px; }
+  .ff-tab{
+    padding:8px 14px; border:1px solid #1A2233; background:transparent;
+    font-size:13px; font-weight:600; cursor:pointer; border-radius:4px; color:#1A2233;
+  }
+  .ff-tab.active{ background:#1A2233; color:#fff; }
+  #ff-grid{
+    display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr));
+    gap:10px; margin-bottom:22px;
+  }
+  .ff-card{
+    border:1px solid #D8D8D0; border-radius:6px; padding:14px; cursor:pointer;
+    background:#FAFAF6; transition:border-color .15s;
+  }
+  .ff-card:hover{ border-color:#1A2233; }
+  .ff-card.active{ border-color:#C1401E; box-shadow:0 0 0 1px #C1401E inset; }
+  .ff-card b{ display:block; font-size:14px; margin-bottom:4px; }
+  .ff-card span{ font-size:12px; color:#5B6472; }
+
+  #ff-panel{
+    display:none; border:1px solid #1A2233; border-radius:6px; padding:18px;
+    margin-bottom:24px; background:#fff;
+  }
+  #ff-panel.show{ display:block; }
+  #ff-panel h3{ margin:0 0 4px; font-size:17px; }
+  #ff-panel .ff-note{ font-size:12.5px; color:#9C3117; margin-bottom:12px; }
+  .ff-dropzone{
+    border:1.5px dashed #9B9887; border-radius:6px; padding:22px; text-align:center;
+    cursor:pointer; font-size:13.5px; color:#5B6472; margin-bottom:14px; background:#FAFAF6;
+  }
+  .ff-dropzone.drag{ border-color:#C1401E; background:#F1EFE3; }
+  .ff-filelist{ font-size:12.5px; margin:8px 0; color:#1A2233; }
+  .ff-opts{ display:flex; flex-wrap:wrap; gap:12px; margin-bottom:14px; }
+  .ff-opt{ display:flex; flex-direction:column; gap:4px; font-size:12.5px; }
+  .ff-opt input[type=text], .ff-opt input[type=number], .ff-opt select{
+    padding:6px 8px; border:1px solid #C9CDBB; border-radius:4px; font-size:13px; min-width:140px;
+  }
+  .ff-opt.checkbox{ flex-direction:row; align-items:center; }
+  #ff-run{
+    background:#1A2233; color:#fff; border:none; padding:10px 18px; border-radius:4px;
+    font-size:13.5px; font-weight:600; cursor:pointer;
+  }
+  #ff-run:disabled{ opacity:.5; cursor:default; }
+  #ff-status{ margin-top:12px; font-size:13px; min-height:18px; }
+  #ff-status.error{ color:#9C3117; }
+  #ff-status a{ color:#3E6B4F; font-weight:600; text-decoration:underline; }
+  #ff-preview table{ border-collapse:collapse; width:100%; font-size:12.5px; margin-top:10px; }
+  #ff-preview th, #ff-preview td{ border:1px solid #E1DFD2; padding:5px 8px; text-align:left; }
+  #ff-uni-chips{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+  .ff-chip{
+    font-size:12px; border:1px solid #1A2233; padding:5px 10px; border-radius:4px;
+    background:transparent; cursor:pointer;
+  }
+  .ff-chip:hover{ background:#1A2233; color:#fff; }
+  #ff-unsupported{ font-size:12.5px; color:#5B6472; border-top:1px solid #E1DFD2; padding-top:14px; margin-top:6px; }
+</style>
+
+<div id="ff-root">
+  <h2>Spirit_Bash Dashboard</h2>
+  <div class="ff-sub">Every conversion below runs right here in your browser — nothing is uploaded to a server.</div>
+
+  <div id="ff-tabs"></div>
+  <div id="ff-grid"></div>
+
+  <div id="ff-panel">
+    <h3 id="ff-panel-title"></h3>
+    <div class="ff-note" id="ff-panel-note"></div>
+    <div class="ff-dropzone" id="ff-dropzone">Drag file(s) here, or click to choose</div>
+    <input type="file" id="ff-file-input" style="display:none">
+    <div class="ff-filelist" id="ff-filelist"></div>
+    <div class="ff-opts" id="ff-opts"></div>
+    <button id="ff-run" disabled>Run</button>
+    <div id="ff-status"></div>
+    <div id="ff-preview"></div>
+  </div>
+
+  <div id="ff-unsupported">
+    <b>Not available in this browser-only dashboard:</b> PowerPoint conversions, PDF password
+    protect/remove, and OCR. These need a real server running LibreOffice/Ghostscript/an OCR
+    engine — no honest way to do them in pure client-side JavaScript, so they're left out
+    instead of faked.
+  </div>
+</div>
+
+<!-- Libraries (all real, all free, all loaded from CDN) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+<script>
+(function(){
+  'use strict';
+
+  if (window.pdfjsLib) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
+  }
+
+  // ---------------------------------------------------------------
+  // Small helpers
+  // ---------------------------------------------------------------
+  function baseName(name){ return name.replace(/\.[^/.]+$/, ''); }
+  function extOf(name){ return (name.split('.').pop() || '').toLowerCase(); }
+  function saveBlob(blob, filename){
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+  }
+  function parsePageList(str, max){
+    var out = new Set();
+    (str || '').split(',').forEach(function(part){
+      part = part.trim(); if (!part) return;
+      if (part.indexOf('-') > -1) {
+        var ab = part.split('-'); var a = parseInt(ab[0],10), b = parseInt(ab[1],10);
+        for (var i=a;i<=b;i++) if (i>=1 && i<=max) out.add(i-1);
+      } else {
+        var n = parseInt(part,10);
+        if (n>=1 && n<=max) out.add(n-1);
+      }
+    });
+    return Array.from(out).sort(function(a,b){return a-b;});
+  }
+  async function readRowsFromWorkbookFile(file){
+    var buf = await file.arrayBuffer();
+    var wb = XLSX.read(buf, { type:'array', cellDates:true });
+    var ws = wb.Sheets[wb.SheetNames[0]];
+    return XLSX.utils.sheet_to_json(ws, { defval:'' });
+  }
+  function rowsToWorkbookBuffer(rows, bookType){
+    var ws = XLSX.utils.json_to_sheet(rows);
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+    return XLSX.write(wb, { type:'array', bookType: bookType });
+  }
+  function rowsToCsvBlob(rows){
+    var ws = XLSX.utils.json_to_sheet(rows);
+    return new Blob([XLSX.utils.sheet_to_csv(ws)], { type:'text/csv' });
+  }
+  function loadImageEl(file){
+    return new Promise(function(resolve,reject){
+      var img = new Image();
+      img.onload = function(){ resolve(img); };
+      img.onerror = reject;
+      img.src = URL.createObjectURL(file);
+    });
+  }
+  function mimeForFormat(fmt){
+    return { jpg:'image/jpeg', jpeg:'image/jpeg', png:'image/png', webp:'image/webp' }[fmt] || 'image/png';
+  }
+  async function toPdfEmbeddableImageBytes(file){
+    // pdf-lib can only embed jpg/png directly; anything else gets
+    // redrawn to a PNG on a canvas first.
+    var ext = extOf(file.name);
+    if (ext === 'jpg' || ext === 'jpeg' || ext === 'png') {
+      return { bytes: await file.arrayBuffer(), kind: (ext === 'png' ? 'png' : 'jpg') };
+    }
+    var img = await loadImageEl(file);
+    var canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+    canvas.getContext('2d').drawImage(img, 0, 0);
+    var blob = await new Promise(function(res){ canvas.toBlob(res, 'image/png'); });
+    return { bytes: await blob.arrayBuffer(), kind: 'png' };
+  }
+  async function getPdfJsDoc(file){
+    var buf = await file.arrayBuffer();
+    return pdfjsLib.getDocument({ data: buf }).promise;
+  }
+  async function extractPdfText(file){
+    var pdf = await getPdfJsDoc(file);
+    var text = '';
+    for (var i=1;i<=pdf.numPages;i++){
+      var page = await pdf.getPage(i);
+      var content = await page.getTextContent();
+      text += content.items.map(function(it){ return it.str; }).join(' ') + '\n\n';
+    }
+    return text;
+  }
+  function buildSimpleDocx(text){
+    var zip = new JSZip();
+    var paragraphs = text.split(/\n{2,}/).map(function(p){return p.trim();}).filter(Boolean);
+    function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    var body = paragraphs.map(function(p){
+      return '<w:p><w:r><w:t xml:space="preserve">' + esc(p) + '</w:t></w:r></w:p>';
+    }).join('');
+    var documentXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+      '<w:body>' + body + '<w:sectPr/></w:body></w:document>';
+    var contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="xml" ContentType="application/xml"/>' +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      '</Types>';
+    var rels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+      '</Relationships>';
+    zip.file('[Content_Types].xml', contentTypes);
+    zip.file('_rels/.rels', rels);
+    zip.file('word/document.xml', documentXml);
+    return zip.generateAsync({ type:'blob' });
+  }
+  async function renderToPdfBlob(htmlString){
+    var container = document.createElement('div');
+    container.style.cssText = 'position:fixed;left:-9999px;top:0;width:700px;padding:24px;background:#fff;font-family:Georgia,serif;';
+    container.innerHTML = htmlString;
+    document.body.appendChild(container);
+    try {
+      var blob = await html2pdf().from(container).set({
+        margin: 10,
+        html2canvas: { scale: 2 },
+        jsPDF: { unit:'pt', format:'a4' }
+      }).outputPdf('blob');
+      return blob;
+    } finally {
+      document.body.removeChild(container);
+    }
+  }
+
+  // ---------------------------------------------------------------
+  // Tool implementations — each returns { blob, filename } or { html }
+  // ---------------------------------------------------------------
+  var Tools = {
+
+    'pdf-merge': async function(files){
+      var merged = await PDFLib.PDFDocument.create();
+      for (var i=0;i<files.length;i++){
+        var bytes = await files[i].arrayBuffer();
+        var doc = await PDFLib.PDFDocument.load(bytes);
+        var pages = await merged.copyPages(doc, doc.getPageIndices());
+        pages.forEach(function(p){ merged.addPage(p); });
+      }
+      var out = await merged.save();
+      return { blob: new Blob([out], {type:'application/pdf'}), filename: 'merged.pdf' };
+    },
+
+    'pdf-split': async function(files){
+      var file = files[0];
+      var bytes = await file.arrayBuffer();
+      var src = await PDFLib.PDFDocument.load(bytes);
+      var zip = new JSZip();
+      for (var i=0;i<src.getPageCount();i++){
+        var doc = await PDFLib.PDFDocument.create();
+        var copied = await doc.copyPages(src, [i]);
+        doc.addPage(copied[0]);
+        var b = await doc.save();
+        zip.file('page-' + (i+1) + '.pdf', b);
+      }
+      var blob = await zip.generateAsync({ type:'blob' });
+      return { blob: blob, filename: baseName(file.name) + '-pages.zip' };
+    },
+
+    'pdf-extract': async function(files, opts){
+      var file = files[0];
+      var bytes = await file.arrayBuffer();
+      var src = await PDFLib.PDFDocument.load(bytes);
+      var indices = parsePageList(opts.ranges, src.getPageCount());
+      var out = await PDFLib.PDFDocument.create();
+      var copied = await out.copyPages(src, indices);
+      copied.forEach(function(p){ out.addPage(p); });
+      var bytesOut = await out.save();
+      return { blob: new Blob([bytesOut],{type:'application/pdf'}), filename: baseName(file.name)+'-extract.pdf' };
+    },
+
+    'pdf-delete': async function(files, opts){
+      var file = files[0];
+      var bytes = await file.arrayBuffer();
+      var src = await PDFLib.PDFDocument.load(bytes);
+      var toRemove = new Set(parsePageList(opts.pages, src.getPageCount()));
+      var keep = [];
+      for (var i=0;i<src.getPageCount();i++) if (!toRemove.has(i)) keep.push(i);
+      var out = await PDFLib.PDFDocument.create();
+      var copied = await out.copyPages(src, keep);
+      copied.forEach(function(p){ out.addPage(p); });
+      var bytesOut = await out.save();
+      return { blob: new Blob([bytesOut],{type:'application/pdf'}), filename: baseName(file.name)+'-deleted.pdf' };
+    },
+
+    'pdf-reorder': async function(files, opts){
+      var file = files[0];
+      var bytes = await file.arrayBuffer();
+      var src = await PDFLib.PDFDocument.load(bytes);
+      var order = (opts.order || '').split(',').map(function(n){ return parseInt(n.trim(),10)-1; })
+        .filter(function(n){ return n>=0 && n<src.getPageCount(); });
+      if (!order.length) throw new Error('Give a page order like 3,1,2');
+      var out = await PDFLib.PDFDocument.create();
+      var copied = await out.copyPages(src, order);
+      copied.forEach(function(p){ out.addPage(p); });
+      var bytesOut = await out.save();
+      return { blob: new Blob([bytesOut],{type:'application/pdf'}), filename: baseName(file.name)+'-reordered.pdf' };
+    },
+
+    'pdf-rotate': async function(files, opts){
+      var file = files[0];
+      var bytes = await file.arrayBuffer();
+      var doc = await PDFLib.PDFDocument.load(bytes);
+      var deg = parseInt(opts.degrees,10) || 90;
+      doc.getPages().forEach(function(page){
+        var current = page.getRotation().angle;
+        page.setRotation(PDFLib.degrees((current + deg) % 360));
+      });
+      var out = await doc.save();
+      return { blob: new Blob([out],{type:'application/pdf'}), filename: baseName(file.name)+'-rotated.pdf' };
+    },
+
+    'pdf-pagenum': async function(files){
+      var file = files[0];
+      var bytes = await file.arrayBuffer();
+      var doc = await PDFLib.PDFDocument.load(bytes);
+      var font = await doc.embedFont(PDFLib.StandardFonts.Helvetica);
+      var pages = doc.getPages();
+      pages.forEach(function(page, idx){
+        var { width } = page.getSize();
+        page.drawText(String(idx+1) + ' / ' + pages.length, {
+          x: width/2 - 20, y: 20, size: 10, font: font, color: PDFLib.rgb(0.2,0.2,0.2)
+        });
+      });
+      var out = await doc.save();
+      return { blob: new Blob([out],{type:'application/pdf'}), filename: baseName(file.name)+'-numbered.pdf' };
+    },
+
+    'pdf-watermark': async function(files, opts){
+      var file = files[0];
+      var bytes = await file.arrayBuffer();
+      var doc = await PDFLib.PDFDocument.load(bytes);
+      var font = await doc.embedFont(PDFLib.StandardFonts.HelveticaBold);
+      var text = opts.text || 'WATERMARK';
+      doc.getPages().forEach(function(page){
+        var { width, height } = page.getSize();
+        page.drawText(text, {
+          x: width/2 - (text.length*8), y: height/2, size: 40, font: font,
+          color: PDFLib.rgb(0.85,0.2,0.1), opacity: 0.25, rotate: PDFLib.degrees(45)
+        });
+      });
+      var out = await doc.save();
+      return { blob: new Blob([out],{type:'application/pdf'}), filename: baseName(file.name)+'-watermarked.pdf' };
+    },
+
+    'pdf-compress': async function(files){
+      var file = files[0];
+      var bytes = await file.arrayBuffer();
+      var doc = await PDFLib.PDFDocument.load(bytes);
+      var out = await doc.save({ useObjectStreams: true });
+      return { blob: new Blob([out],{type:'application/pdf'}), filename: baseName(file.name)+'-compressed.pdf',
+        note: 'Basic compression only (object-stream re-packing). For real image-heavy PDFs this saves modestly — deep compression needs Ghostscript on a server.' };
+    },
+
+    'pdf-remove-meta': async function(files){
+      var file = files[0];
+      var bytes = await file.arrayBuffer();
+      var doc = await PDFLib.PDFDocument.load(bytes);
+      doc.setTitle(''); doc.setAuthor(''); doc.setSubject(''); doc.setKeywords([]);
+      doc.setProducer(''); doc.setCreator('');
+      var out = await doc.save();
+      return { blob: new Blob([out],{type:'application/pdf'}), filename: baseName(file.name)+'-clean.pdf' };
+    },
+
+    'pdf-to-image': async function(files, opts){
+      var file = files[0];
+      var fmt = opts.format || 'jpg';
+      var pdf = await getPdfJsDoc(file);
+      var mime = mimeForFormat(fmt);
+      if (pdf.numPages === 1){
+        var page = await pdf.getPage(1);
+        var vp = page.getViewport({ scale: 1.6 });
+        var canvas = document.createElement('canvas');
+        canvas.width = vp.width; canvas.height = vp.height;
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+        var blob = await new Promise(function(res){ canvas.toBlob(res, mime, 0.92); });
+        return { blob: blob, filename: baseName(file.name)+'.'+fmt };
+      }
+      var zip = new JSZip();
+      for (var i=1;i<=pdf.numPages;i++){
+        var pg = await pdf.getPage(i);
+        var viewport = pg.getViewport({ scale: 1.6 });
+        var c = document.createElement('canvas');
+        c.width = viewport.width; c.height = viewport.height;
+        await pg.render({ canvasContext: c.getContext('2d'), viewport: viewport }).promise;
+        var b = await new Promise(function(res){ c.toBlob(res, mime, 0.92); });
+        zip.file('page-' + i + '.' + fmt, b);
+      }
+      var zipBlob = await zip.generateAsync({ type:'blob' });
+      return { blob: zipBlob, filename: baseName(file.name)+'-pages.zip' };
+    },
+
+    'pdf-to-text': async function(files){
+      var file = files[0];
+      var text = await extractPdfText(file);
+      return { blob: new Blob([text],{type:'text/plain'}), filename: baseName(file.name)+'.txt' };
+    },
+
+    'pdf-to-word': async function(files){
+      var file = files[0];
+      var text = await extractPdfText(file);
+      var blob = await buildSimpleDocx(text || ' ');
+      return { blob: blob, filename: baseName(file.name)+'.docx',
+        note: 'Text only — layout, images and tables are not preserved.' };
+    },
+
+    'pdf-to-excel': async function(files){
+      var file = files[0];
+      var text = await extractPdfText(file);
+      var lines = text.split('\n').map(function(l){return l.trim();}).filter(Boolean);
+      var rows = lines.map(function(l){ return l.split(/\s{2,}|\t/).filter(function(c){return c!=='';}); });
+      var ws = XLSX.utils.aoa_to_sheet(rows.length ? rows : [['']]);
+      var wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+      var out = XLSX.write(wb, { type:'array', bookType:'xlsx' });
+      return { blob: new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),
+        filename: baseName(file.name)+'.xlsx',
+        note: 'Best-effort text extraction into columns — works well for simple line-based tables only.' };
+    },
+
+    'images-to-pdf': async function(files){
+      var doc = await PDFLib.PDFDocument.create();
+      for (var i=0;i<files.length;i++){
+        var res = await toPdfEmbeddableImageBytes(files[i]);
+        var img = res.kind === 'png' ? await doc.embedPng(res.bytes) : await doc.embedJpg(res.bytes);
+        var page = doc.addPage([img.width, img.height]);
+        page.drawImage(img, { x:0, y:0, width: img.width, height: img.height });
+      }
+      var out = await doc.save();
+      return { blob: new Blob([out],{type:'application/pdf'}), filename: 'images.pdf' };
+    },
+
+    'word-to-html': async function(files){
+      var buf = await files[0].arrayBuffer();
+      var result = await mammoth.convertToHtml({ arrayBuffer: buf });
+      return { blob: new Blob([result.value],{type:'text/html'}), filename: baseName(files[0].name)+'.html' };
+    },
+
+    'word-to-text': async function(files){
+      var buf = await files[0].arrayBuffer();
+      var result = await mammoth.extractRawText({ arrayBuffer: buf });
+      return { blob: new Blob([result.value],{type:'text/plain'}), filename: baseName(files[0].name)+'.txt' };
+    },
+
+    'word-to-pdf': async function(files){
+      var buf = await files[0].arrayBuffer();
+      var result = await mammoth.convertToHtml({ arrayBuffer: buf });
+      var blob = await renderToPdfBlob(result.value);
+      return { blob: blob, filename: baseName(files[0].name)+'.pdf', note: 'Formatting is approximate — complex layouts, headers/footers and images may not carry over exactly.' };
+    },
+
+    'excel-to-pdf': async function(files){
+      var file = files[0];
+      var html;
+      if (extOf(file.name) === 'csv'){
+        var rows = await readRowsFromWorkbookFile(file);
+        var ws = XLSX.utils.json_to_sheet(rows);
+        html = XLSX.utils.sheet_to_html(ws);
+      } else {
+        var buf = await file.arrayBuffer();
+        var wb = XLSX.read(buf, { type:'array' });
+        html = XLSX.utils.sheet_to_html(wb.Sheets[wb.SheetNames[0]]);
+      }
+      var blob = await renderToPdfBlob(html);
+      return { blob: blob, filename: baseName(file.name)+'.pdf' };
+    },
+
+    'csv-to-excel': async function(files){
+      var rows = await readRowsFromWorkbookFile(files[0]);
+      var out = rowsToWorkbookBuffer(rows, 'xlsx');
+      return { blob: new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}), filename: baseName(files[0].name)+'.xlsx' };
+    },
+
+    'excel-to-csv': async function(files){
+      var rows = await readRowsFromWorkbookFile(files[0]);
+      return { blob: rowsToCsvBlob(rows), filename: baseName(files[0].name)+'.csv' };
+    },
+
+    'csv-to-json': async function(files){
+      var rows = await readRowsFromWorkbookFile(files[0]);
+      return { blob: new Blob([JSON.stringify(rows,null,2)],{type:'application/json'}), filename: baseName(files[0].name)+'.json' };
+    },
+
+    'json-to-csv': async function(files){
+      var text = await files[0].text();
+      var rows = JSON.parse(text);
+      return { blob: rowsToCsvBlob(rows), filename: baseName(files[0].name)+'.csv' };
+    },
+
+    'csv-cleaner': async function(files, opts){
+      var rows = await readRowsFromWorkbookFile(files[0]);
+      if (opts.trim) rows = rows.map(function(r){
+        var o = {}; for (var k in r) o[k] = (typeof r[k]==='string') ? r[k].trim() : r[k]; return o;
+      });
+      if (opts.blank) rows = rows.filter(function(r){
+        return Object.keys(r).some(function(k){ return String(r[k]).trim() !== ''; });
+      });
+      if (opts.dedupe){
+        var seen = {}; rows = rows.filter(function(r){
+          var key = JSON.stringify(r);
+          if (seen[key]) return false; seen[key]=1; return true;
+        });
+      }
+      var fmt = opts.format || 'csv';
+      if (fmt === 'json') return { blob: new Blob([JSON.stringify(rows,null,2)],{type:'application/json'}), filename: baseName(files[0].name)+'-cleaned.json' };
+      if (fmt === 'xlsx') { var out = rowsToWorkbookBuffer(rows,'xlsx'); return { blob: new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}), filename: baseName(files[0].name)+'-cleaned.xlsx' }; }
+      return { blob: rowsToCsvBlob(rows), filename: baseName(files[0].name)+'-cleaned.csv' };
+    },
+
+    'csv-viewer': async function(files){
+      var rows = await readRowsFromWorkbookFile(files[0]);
+      if (!rows.length) return { html: '<p>No rows found.</p>' };
+      var cols = Object.keys(rows[0]);
+      var html = '<table><thead><tr>' + cols.map(function(c){return '<th>'+c+'</th>';}).join('') + '</tr></thead><tbody>';
+      rows.slice(0,200).forEach(function(r){
+        html += '<tr>' + cols.map(function(c){ return '<td>'+String(r[c])+'</td>'; }).join('') + '</tr>';
+      });
+      html += '</tbody></table>';
+      if (rows.length > 200) html += '<p style="font-size:12px;color:#5B6472;">Showing first 200 of ' + rows.length + ' rows.</p>';
+      return { html: html };
+    },
+
+    'img-compress': async function(files, opts){
+      var file = files[0];
+      var img = await loadImageEl(file);
+      var canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+      canvas.getContext('2d').drawImage(img,0,0);
+      var ext = extOf(file.name) === 'png' ? 'png' : 'jpg';
+      var q = (parseInt(opts.quality,10) || 70) / 100;
+      var blob = await new Promise(function(res){ canvas.toBlob(res, mimeForFormat(ext), q); });
+      return { blob: blob, filename: baseName(file.name)+'-compressed.'+ext };
+    },
+
+    'img-resize': async function(files, opts){
+      var file = files[0];
+      var img = await loadImageEl(file);
+      var w = parseInt(opts.width,10) || img.naturalWidth;
+      var h = opts.height ? parseInt(opts.height,10) : Math.round(img.naturalHeight * (w / img.naturalWidth));
+      var canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      var ext = extOf(file.name) === 'png' ? 'png' : 'jpg';
+      var blob = await new Promise(function(res){ canvas.toBlob(res, mimeForFormat(ext), 0.9); });
+      return { blob: blob, filename: baseName(file.name)+'-resized.'+ext };
+    },
+
+    'img-convert': async function(files, opts){
+      var file = files[0];
+      var img = await loadImageEl(file);
+      var canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+      canvas.getContext('2d').drawImage(img,0,0);
+      var fmt = opts.format || 'png';
+      var blob = await new Promise(function(res){ canvas.toBlob(res, mimeForFormat(fmt), 0.92); });
+      return { blob: blob, filename: baseName(file.name)+'.'+fmt };
+    },
+
+    'img-rotate': async function(files, opts){
+      var file = files[0];
+      var img = await loadImageEl(file);
+      var deg = parseInt(opts.degrees,10) || 0;
+      var swap = (deg === 90 || deg === 270);
+      var canvas = document.createElement('canvas');
+      canvas.width = swap ? img.naturalHeight : img.naturalWidth;
+      canvas.height = swap ? img.naturalWidth : img.naturalHeight;
+      var ctx = canvas.getContext('2d');
+      ctx.translate(canvas.width/2, canvas.height/2);
+      ctx.rotate(deg * Math.PI/180);
+      if (opts.flip) ctx.scale(-1,1);
+      ctx.drawImage(img, -img.naturalWidth/2, -img.naturalHeight/2);
+      var ext = extOf(file.name) === 'png' ? 'png' : 'jpg';
+      var blob = await new Promise(function(res){ canvas.toBlob(res, mimeForFormat(ext), 0.92); });
+      return { blob: blob, filename: baseName(file.name)+'-rotated.'+ext };
+    },
+
+    'img-grayscale': async function(files){
+      var file = files[0];
+      var img = await loadImageEl(file);
+      var canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img,0,0);
+      var data = ctx.getImageData(0,0,canvas.width,canvas.height);
+      for (var i=0;i<data.data.length;i+=4){
+        var avg = data.data[i]*0.3 + data.data[i+1]*0.59 + data.data[i+2]*0.11;
+        data.data[i]=data.data[i+1]=data.data[i+2]=avg;
+      }
+      ctx.putImageData(data,0,0);
+      var ext = extOf(file.name) === 'png' ? 'png' : 'jpg';
+      var blob = await new Promise(function(res){ canvas.toBlob(res, mimeForFormat(ext), 0.92); });
+      return { blob: blob, filename: baseName(file.name)+'-grayscale.'+ext };
+    }
+  };
+
+  // ---------------------------------------------------------------
+  // Tool + category registry (drives the whole UI)
+  // ---------------------------------------------------------------
+  var CATS = [
+    { id:'universal', label:'Universal' },
+    { id:'pdf', label:'PDF' },
+    { id:'word', label:'Word / Office' },
+    { id:'excel', label:'Excel & CSV' },
+    { id:'image', label:'Image' }
+  ];
+
+  var TOOLS = [
+    { id:'pdf-merge', cat:'pdf', label:'Merge PDF', desc:'Combine 2+ PDFs into one', accept:'.pdf', multiple:true, minFiles:2 },
+    { id:'pdf-split', cat:'pdf', label:'Split PDF', desc:'Every page → its own PDF (zip)', accept:'.pdf' },
+    { id:'pdf-extract', cat:'pdf', label:'Extract Pages', desc:'Pull out a page range', accept:'.pdf',
+      opts:[{key:'ranges',label:'Pages (e.g. 1-3,5)',type:'text',def:'1'}] },
+    { id:'pdf-delete', cat:'pdf', label:'Delete Pages', desc:'Remove specific pages', accept:'.pdf',
+      opts:[{key:'pages',label:'Pages to delete (e.g. 2,4)',type:'text',def:''}] },
+    { id:'pdf-reorder', cat:'pdf', label:'Reorder Pages', desc:'Rearrange page order', accept:'.pdf',
+      opts:[{key:'order',label:'New order (e.g. 3,1,2)',type:'text',def:''}] },
+    { id:'pdf-rotate', cat:'pdf', label:'Rotate PDF', desc:'Rotate every page', accept:'.pdf',
+      opts:[{key:'degrees',label:'Degrees',type:'select',choices:[90,180,270],def:90}] },
+    { id:'pdf-pagenum', cat:'pdf', label:'Add Page Numbers', desc:'Stamp page x / y at the bottom', accept:'.pdf' },
+    { id:'pdf-watermark', cat:'pdf', label:'Watermark PDF', desc:'Diagonal text watermark', accept:'.pdf',
+      opts:[{key:'text',label:'Watermark text',type:'text',def:'CONFIDENTIAL'}] },
+    { id:'pdf-compress', cat:'pdf', label:'Compress PDF (basic)', desc:'Repack PDF objects — modest savings', accept:'.pdf' },
+    { id:'pdf-remove-meta', cat:'pdf', label:'Remove Metadata', desc:'Clear title/author/producer fields', accept:'.pdf' },
+    { id:'pdf-to-image', cat:'pdf', label:'PDF → JPG/PNG', desc:'Render pages as images', accept:'.pdf',
+      opts:[{key:'format',label:'Format',type:'select',choices:['jpg','png'],def:'jpg'}] },
+    { id:'pdf-to-text', cat:'pdf', label:'PDF → Text', desc:'Extract plain text', accept:'.pdf' },
+    { id:'pdf-to-word', cat:'pdf', label:'PDF → Word (basic)', desc:'Text only, no layout', accept:'.pdf' },
+    { id:'pdf-to-excel', cat:'pdf', label:'PDF → Excel (basic)', desc:'Best for simple line-based tables', accept:'.pdf' },
+    { id:'images-to-pdf', cat:'pdf', label:'Images → PDF', desc:'One or more images → single PDF', accept:'image/*', multiple:true },
+
+    { id:'word-to-pdf', cat:'word', label:'Word → PDF', desc:'.docx → PDF (approximate formatting)', accept:'.docx' },
+    { id:'word-to-html', cat:'word', label:'Word → HTML', desc:'.docx → HTML', accept:'.docx' },
+    { id:'word-to-text', cat:'word', label:'Word → Text', desc:'.docx → plain text', accept:'.docx' },
+    { id:'excel-to-pdf', cat:'word', label:'Excel/CSV → PDF', desc:'Table rendered as a PDF', accept:'.xlsx,.xls,.csv' },
+
+    { id:'csv-to-excel', cat:'excel', label:'CSV → Excel', desc:'.csv → .xlsx', accept:'.csv' },
+    { id:'excel-to-csv', cat:'excel', label:'Excel → CSV', desc:'.xlsx/.xls → .csv', accept:'.xlsx,.xls' },
+    { id:'csv-to-json', cat:'excel', label:'CSV/Excel → JSON', desc:'Rows as a JSON array', accept:'.csv,.xlsx,.xls' },
+    { id:'json-to-csv', cat:'excel', label:'JSON → CSV', desc:'JSON array of objects → .csv', accept:'.json' },
+    { id:'csv-cleaner', cat:'excel', label:'CSV/Excel Cleaner', desc:'Trim, dedupe, drop blank rows', accept:'.csv,.xlsx,.xls',
+      opts:[
+        {key:'trim',label:'Trim spaces',type:'checkbox',def:true},
+        {key:'dedupe',label:'Remove duplicate rows',type:'checkbox',def:true},
+        {key:'blank',label:'Remove blank rows',type:'checkbox',def:true},
+        {key:'format',label:'Output as',type:'select',choices:['csv','xlsx','json'],def:'csv'}
+      ] },
+    { id:'csv-viewer', cat:'excel', label:'CSV/Excel Viewer', desc:'Preview the first 200 rows', accept:'.csv,.xlsx,.xls', preview:true },
+
+    { id:'img-compress', cat:'image', label:'Image Compressor', desc:'Reduce file size', accept:'image/*',
+      opts:[{key:'quality',label:'Quality (1-100)',type:'number',def:70}] },
+    { id:'img-resize', cat:'image', label:'Image Resizer', desc:'Resize, keeping aspect ratio if height blank', accept:'image/*',
+      opts:[{key:'width',label:'Width (px)',type:'number',def:800},{key:'height',label:'Height (px, optional)',type:'number',def:''}] },
+    { id:'img-convert', cat:'image', label:'Format Converter', desc:'JPG ⇄ PNG ⇄ WEBP', accept:'image/*',
+      opts:[{key:'format',label:'Target format',type:'select',choices:['jpg','png','webp'],def:'png'}] },
+    { id:'img-rotate', cat:'image', label:'Rotate / Flip', desc:'Rotate and/or mirror', accept:'image/*',
+      opts:[{key:'degrees',label:'Rotate',type:'select',choices:[0,90,180,270],def:90},{key:'flip',label:'Flip horizontal',type:'checkbox',def:false}] },
+    { id:'img-grayscale', cat:'image', label:'Grayscale', desc:'Convert to black & white', accept:'image/*' }
+  ];
+
+  var EXT_RECOMMEND = {
+    pdf: ['pdf-to-image','pdf-to-text','pdf-compress','pdf-merge'],
+    docx: ['word-to-pdf','word-to-html','word-to-text'],
+    doc: ['word-to-pdf','word-to-text'],
+    xlsx: ['excel-to-csv','csv-cleaner','excel-to-pdf'],
+    xls: ['excel-to-csv','csv-cleaner'],
+    csv: ['csv-to-excel','csv-cleaner','csv-viewer'],
+    json: ['json-to-csv'],
+    jpg: ['img-compress','img-resize','images-to-pdf'],
+    jpeg: ['img-compress','img-resize','images-to-pdf'],
+    png: ['img-compress','img-resize','images-to-pdf'],
+    webp: ['img-convert','img-compress']
+  };
+
+  // ---------------------------------------------------------------
+  // UI wiring
+  // ---------------------------------------------------------------
+  var tabsEl = document.getElementById('ff-tabs');
+  var gridEl = document.getElementById('ff-grid');
+  var panelEl = document.getElementById('ff-panel');
+  var titleEl = document.getElementById('ff-panel-title');
+  var noteEl = document.getElementById('ff-panel-note');
+  var dropzoneEl = document.getElementById('ff-dropzone');
+  var fileInputEl = document.getElementById('ff-file-input');
+  var filelistEl = document.getElementById('ff-filelist');
+  var optsEl = document.getElementById('ff-opts');
+  var runBtn = document.getElementById('ff-run');
+  var statusEl = document.getElementById('ff-status');
+  var previewEl = document.getElementById('ff-preview');
+
+  var activeCat = 'universal';
+  var activeTool = null;
+  var currentFiles = [];
+
+  function renderTabs(){
+    tabsEl.innerHTML = '';
+    CATS.forEach(function(cat){
+      var b = document.createElement('button');
+      b.className = 'ff-tab' + (cat.id===activeCat ? ' active' : '');
+      b.textContent = cat.label;
+      b.onclick = function(){ activeCat = cat.id; renderTabs(); renderGrid(); closePanel(); };
+      tabsEl.appendChild(b);
+    });
+  }
+
+  function renderGrid(){
+    gridEl.innerHTML = '';
+    if (activeCat === 'universal'){ renderUniversalCard(); return; }
+    TOOLS.filter(function(t){ return t.cat===activeCat; }).forEach(function(t){
+      var card = document.createElement('div');
+      card.className = 'ff-card' + (activeTool && activeTool.id===t.id ? ' active' : '');
+      card.innerHTML = '<b>'+t.label+'</b><span>'+t.desc+'</span>';
+      card.onclick = function(){ openTool(t.id); };
+      gridEl.appendChild(card);
+    });
+  }
+
+  function renderUniversalCard(){
+    var card = document.createElement('div');
+    card.style.gridColumn = '1 / -1';
+    card.className = 'ff-card';
+    card.innerHTML =
+      '<b>Drop any file to see what you can do with it</b>' +
+      '<div class="ff-dropzone" id="ff-uni-drop" style="margin-top:10px;">Drag a file here, or click to choose</div>' +
+      '<input type="file" id="ff-uni-input" style="display:none">' +
+      '<div id="ff-uni-chips"></div>';
+    gridEl.appendChild(card);
+
+    var uniDrop = document.getElementById('ff-uni-drop');
+    var uniInput = document.getElementById('ff-uni-input');
+    var uniChips = document.getElementById('ff-uni-chips');
+
+    function handle(file){
+      var ext = extOf(file.name);
+      var recs = EXT_RECOMMEND[ext];
+      uniChips.innerHTML = '';
+      if (!recs){
+        uniChips.innerHTML = '<span style="font-size:12.5px;color:#5B6472;">No matching tool for .'+ext+' yet.</span>';
+        return;
+      }
+      recs.forEach(function(toolId){
+        var tool = TOOLS.filter(function(t){return t.id===toolId;})[0];
+        if (!tool) return;
+        var chip = document.createElement('button');
+        chip.className = 'ff-chip';
+        chip.textContent = tool.label;
+        chip.onclick = function(){
+          activeCat = tool.cat; renderTabs(); renderGrid();
+          openTool(tool.id, [file]);
+        };
+        uniChips.appendChild(chip);
+      });
+    }
+    uniDrop.onclick = function(){ uniInput.click(); };
+    uniInput.onchange = function(e){ if (e.target.files[0]) handle(e.target.files[0]); };
+    ['dragenter','dragover'].forEach(function(ev){ uniDrop.addEventListener(ev, function(e){ e.preventDefault(); uniDrop.classList.add('drag'); }); });
+    ['dragleave','drop'].forEach(function(ev){ uniDrop.addEventListener(ev, function(e){ e.preventDefault(); uniDrop.classList.remove('drag'); }); });
+    uniDrop.addEventListener('drop', function(e){ var f = e.dataTransfer.files[0]; if (f) handle(f); });
+  }
+
+  function openTool(toolId, prefillFiles){
+    activeTool = TOOLS.filter(function(t){ return t.id===toolId; })[0];
+    if (!activeTool) return;
+    renderGrid();
+    panelEl.classList.add('show');
+    titleEl.textContent = activeTool.label;
+    noteEl.textContent = '';
+    statusEl.textContent = ''; statusEl.className = '';
+    previewEl.innerHTML = '';
+    currentFiles = [];
+    filelistEl.textContent = '';
+    fileInputEl.value = '';
+    fileInputEl.multiple = !!activeTool.multiple;
+    fileInputEl.accept = activeTool.accept || '*/*';
+    runBtn.disabled = true;
+
+    optsEl.innerHTML = '';
+    (activeTool.opts || []).forEach(function(opt){
+      var wrap = document.createElement('div');
+      wrap.className = 'ff-opt' + (opt.type==='checkbox' ? ' checkbox' : '');
+      var label = document.createElement('label'); label.textContent = opt.label;
+      var input;
+      if (opt.type === 'select'){
+        input = document.createElement('select');
+        opt.choices.forEach(function(c){
+          var o = document.createElement('option'); o.value = c; o.textContent = c;
+          if (c === opt.def) o.selected = true;
+          input.appendChild(o);
+        });
+      } else if (opt.type === 'checkbox'){
+        input = document.createElement('input'); input.type = 'checkbox'; input.checked = !!opt.def;
+      } else {
+        input = document.createElement('input');
+        input.type = opt.type === 'number' ? 'number' : 'text';
+        input.value = opt.def !== undefined ? opt.def : '';
+      }
+      input.dataset.key = opt.key;
+      if (opt.type === 'checkbox'){ wrap.appendChild(input); wrap.appendChild(label); }
+      else { wrap.appendChild(label); wrap.appendChild(input); }
+      optsEl.appendChild(wrap);
+    });
+
+    if (prefillFiles && prefillFiles.length){
+      currentFiles = prefillFiles;
+      filelistEl.textContent = prefillFiles.map(function(f){return f.name;}).join(', ');
+      runBtn.disabled = false;
+    }
+
+    panelEl.scrollIntoView({ behavior:'smooth', block:'start' });
+  }
+
+  function closePanel(){
+    panelEl.classList.remove('show');
+    activeTool = null;
+  }
+
+  dropzoneEl.onclick = function(){ fileInputEl.click(); };
+  fileInputEl.onchange = function(e){ setFiles(Array.from(e.target.files)); };
+  ['dragenter','dragover'].forEach(function(ev){ dropzoneEl.addEventListener(ev, function(e){ e.preventDefault(); dropzoneEl.classList.add('drag'); }); });
+  ['dragleave','drop'].forEach(function(ev){ dropzoneEl.addEventListener(ev, function(e){ e.preventDefault(); dropzoneEl.classList.remove('drag'); }); });
+  dropzoneEl.addEventListener('drop', function(e){ setFiles(Array.from(e.dataTransfer.files)); });
+
+  function setFiles(files){
+    if (!activeTool) return;
+    currentFiles = activeTool.multiple ? files : files.slice(0,1);
+    filelistEl.textContent = currentFiles.map(function(f){return f.name;}).join(', ');
+    var minOk = !activeTool.minFiles || currentFiles.length >= activeTool.minFiles;
+    runBtn.disabled = !(currentFiles.length && minOk);
+    if (activeTool.minFiles && currentFiles.length < activeTool.minFiles){
+      statusEl.textContent = 'This tool needs at least ' + activeTool.minFiles + ' files.';
+      statusEl.className = 'error';
+    } else {
+      statusEl.textContent = ''; statusEl.className = '';
+    }
+  }
+
+  function collectOpts(){
+    var opts = {};
+    optsEl.querySelectorAll('[data-key]').forEach(function(input){
+      opts[input.dataset.key] = input.type === 'checkbox' ? input.checked : input.value;
+    });
+    return opts;
+  }
+
+  runBtn.onclick = async function(){
+    if (!activeTool || !currentFiles.length) return;
+    runBtn.disabled = true;
+    statusEl.textContent = 'Working…'; statusEl.className = '';
+    previewEl.innerHTML = '';
+    try {
+      var fn = Tools[activeTool.id];
+      var result = await fn(currentFiles, collectOpts());
+      if (result.html){
+        previewEl.innerHTML = result.html;
+        statusEl.textContent = 'Done.';
+      } else {
+        saveBlob(result.blob, result.filename);
+        statusEl.textContent = 'Done — ' + result.filename + ' downloaded.';
+        if (result.note) noteEl.textContent = result.note;
+      }
+    } catch (err){
+      statusEl.textContent = (err && err.message) ? err.message : 'Something went wrong.';
+      statusEl.className = 'error';
+    } finally {
+      runBtn.disabled = false;
+    }
+  };
+
+  renderTabs();
+  renderGrid();
+})();
+</script>
